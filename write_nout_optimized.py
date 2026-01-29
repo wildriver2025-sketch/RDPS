@@ -1,6 +1,7 @@
 
 from netCDF4 import Dataset
 import numpy as np
+import os
 from typing import Optional, Dict, Tuple
 
 # Attributes to exclude when copying from source
@@ -345,7 +346,8 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
                 shuffle=True,
                 packing=True,
                 packing_dtype='i2',
-                use_fixed_packing=True):  # 새 옵션: 고정 packing 사용
+                use_fixed_packing=True,
+                single_thread_write=True):
     """
     WRF 출력을 NetCDF로 저장 (최적화 버전)
 
@@ -379,157 +381,188 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         packing 데이터 타입
     use_fixed_packing : bool
         고정 packing 파라미터 사용 (True 권장 - 파일 크기 일관성)
+    single_thread_write : bool
+        파일 쓰기 시 단일 스레드 사용 (True 권장 - HDF5 thread safety)
+
+    Note:
+    -----
+    HDF5/netCDF4 라이브러리는 기본적으로 thread-safe하지 않습니다.
+    OpenMP 환경(OMP_NUM_THREADS > 1)에서 파일 쓰기 시 데이터 손상이나
+    파일 크기 불규칙 문제가 발생할 수 있습니다.
+    single_thread_write=True로 설정하면 파일 쓰기 동안만 단일 스레드로 전환합니다.
     """
 
-    # Time 차원 추가
-    for key in var_soil:
-        var_soil[key] = var_soil[key].squeeze().expand_dims("Time")
-    for key in var_2d:
-        var_2d[key] = var_2d[key].squeeze().expand_dims("Time")
-    for key in var_engy:
-        var_engy[key] = var_engy[key].squeeze().expand_dims("Time")
-    for key in var_post:
-        var_post[key] = var_post[key].squeeze().expand_dims("Time")
-    for key in plev_3d:
-        plev_3d[key] = plev_3d[key].squeeze().expand_dims("Time")
-    for key in plev_q:
-        plev_q[key] = plev_q[key].squeeze().expand_dims("Time")
-    for key in plev_qn:
-        plev_qn[key] = plev_qn[key].squeeze().expand_dims("Time")
+    # ==========================================================================
+    # OMP 스레드 관리: 파일 쓰기 전 단일 스레드로 전환
+    # ==========================================================================
+    original_omp = None
+    if single_thread_write:
+        original_omp = os.environ.get('OMP_NUM_THREADS', None)
+        os.environ['OMP_NUM_THREADS'] = '1'
+        print(f"  [OMP] Thread count set to 1 for safe file I/O (was: {original_omp})")
 
-    # 압축 옵션 (chunksizes는 변수별로 설정)
-    comp_opts = {}
-    if compression in ['deflate', 'zlib']:
-        comp_opts = {
-            'zlib': True,
-            'complevel': deflate_level,
-            'shuffle': shuffle
-        }
+    try:
+        # Time 차원 추가
+        for key in var_soil:
+            var_soil[key] = var_soil[key].squeeze().expand_dims("Time")
+        for key in var_2d:
+            var_2d[key] = var_2d[key].squeeze().expand_dims("Time")
+        for key in var_engy:
+            var_engy[key] = var_engy[key].squeeze().expand_dims("Time")
+        for key in var_post:
+            var_post[key] = var_post[key].squeeze().expand_dims("Time")
+        for key in plev_3d:
+            plev_3d[key] = plev_3d[key].squeeze().expand_dims("Time")
+        for key in plev_q:
+            plev_q[key] = plev_q[key].squeeze().expand_dims("Time")
+        for key in plev_qn:
+            plev_qn[key] = plev_qn[key].squeeze().expand_dims("Time")
 
-    # fill_value
-    fill_values = {'i1': -127, 'i2': -32767, 'i4': -2147483647}
-    fill_value = fill_values.get(packing_dtype, -32767)
+        # 압축 옵션 (chunksizes는 변수별로 설정)
+        comp_opts = {}
+        if compression in ['deflate', 'zlib']:
+            comp_opts = {
+                'zlib': True,
+                'complevel': deflate_level,
+                'shuffle': shuffle
+            }
 
-    # 출력 파일 경로
-    out_unis = ncout + '_unis_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
-    out_pres = ncout + '_pres_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
+        # fill_value
+        fill_values = {'i1': -127, 'i2': -32767, 'i4': -2147483647}
+        fill_value = fill_values.get(packing_dtype, -32767)
 
-    # 그리드 크기 (청크 계산용)
-    nx = int(fin.getncattr("WEST-EAST_GRID_DIMENSION")) - 1
-    ny = int(fin.getncattr("SOUTH-NORTH_GRID_DIMENSION")) - 1
+        # 출력 파일 경로
+        out_unis = ncout + '_unis_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
+        out_pres = ncout + '_pres_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
 
-    # =========================================================================
-    # UNIS 파일 (단일면 변수) 먼저 완전히 기록 후 닫기
-    # =========================================================================
-    print(f"  Writing UNIS file: {out_unis}")
-    uout = Dataset(out_unis, "w", format='NETCDF4')
+        # 그리드 크기 (청크 계산용)
+        nx = int(fin.getncattr("WEST-EAST_GRID_DIMENSION")) - 1
+        ny = int(fin.getncattr("SOUTH-NORTH_GRID_DIMENSION")) - 1
 
-    # 글로벌 속성 복사
-    _copy_global_attrs(fin, uout, plev, ncout)
+        # =====================================================================
+        # UNIS 파일 (단일면 변수) 먼저 완전히 기록 후 닫기
+        # =====================================================================
+        print(f"  Writing UNIS file: {out_unis}")
+        uout = Dataset(out_unis, "w", format='NETCDF4')
 
-    # 차원 생성
-    uout.createDimension("Time", None)
-    uout.createDimension("DateStrLen", 19)
-    uout.createDimension("west_east", nx)
-    uout.createDimension("south_north", ny)
-    if len(plev) != 0:
-        uout.createDimension("bottom_top", len(plev))
+        # 글로벌 속성 복사
+        _copy_global_attrs(fin, uout, plev, ncout)
 
-    # 토양층 차원
-    sf_physics = fin.getncattr("SF_SURFACE_PHYSICS")
-    if sf_physics == 1:
-        uout.createDimension("soil_layers_stag", 5)
-    elif sf_physics == 2:
-        uout.createDimension("soil_layers_stag", 4)
+        # 차원 생성
+        uout.createDimension("Time", None)
+        uout.createDimension("DateStrLen", 19)
+        uout.createDimension("west_east", nx)
+        uout.createDimension("south_north", ny)
+        if len(plev) != 0:
+            uout.createDimension("bottom_top", len(plev))
 
-    # 기본 변수 (Times, XLAT, XLONG 등)
-    basic_unis = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'ZS', 'DZS', 'HGT']
-    _write_basic_vars(fin, uout, basic_unis, comp_opts)
+        # 토양층 차원
+        sf_physics = fin.getncattr("SF_SURFACE_PHYSICS")
+        if sf_physics == 1:
+            uout.createDimension("soil_layers_stag", 5)
+        elif sf_physics == 2:
+            uout.createDimension("soil_layers_stag", 4)
 
-    # 2D 변수
-    dims_2d = (u'Time', u'south_north', u'west_east')
-    for key, data in var_2d.items():
-        write_variable_with_packing(
-            uout, key.upper(), data.values, dims_2d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # 기본 변수 (Times, XLAT, XLONG 등)
+        basic_unis = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'ZS', 'DZS', 'HGT']
+        _write_basic_vars(fin, uout, basic_unis, comp_opts)
 
-    # Energy 변수
-    for key, data in var_engy.items():
-        write_variable_with_packing(
-            uout, key.upper(), data.values, dims_2d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # 2D 변수
+        dims_2d = (u'Time', u'south_north', u'west_east')
+        for key, data in var_2d.items():
+            write_variable_with_packing(
+                uout, key.upper(), data.values, dims_2d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    # Post 변수
-    for key, data in var_post.items():
-        write_variable_with_packing(
-            uout, key.upper(), data.values, dims_2d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # Energy 변수
+        for key, data in var_engy.items():
+            write_variable_with_packing(
+                uout, key.upper(), data.values, dims_2d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    # Soil 변수
-    dims_soil = (u'Time', u'soil_layers_stag', u'south_north', u'west_east')
-    for key, data in var_soil.items():
-        write_variable_with_packing(
-            uout, key.upper(), data.values, dims_soil, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # Post 변수
+        for key, data in var_post.items():
+            write_variable_with_packing(
+                uout, key.upper(), data.values, dims_2d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    uout.close()
-    print(f"  UNIS file completed")
+        # Soil 변수
+        dims_soil = (u'Time', u'soil_layers_stag', u'south_north', u'west_east')
+        for key, data in var_soil.items():
+            write_variable_with_packing(
+                uout, key.upper(), data.values, dims_soil, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    # =========================================================================
-    # PRES 파일 (기압면 변수) 기록
-    # =========================================================================
-    print(f"  Writing PRES file: {out_pres}")
-    pout = Dataset(out_pres, "w", format='NETCDF4')
+        uout.close()
+        print(f"  UNIS file completed")
 
-    # 글로벌 속성 복사
-    _copy_global_attrs(fin, pout, plev, ncout)
+        # =====================================================================
+        # PRES 파일 (기압면 변수) 기록
+        # =====================================================================
+        print(f"  Writing PRES file: {out_pres}")
+        pout = Dataset(out_pres, "w", format='NETCDF4')
 
-    # 차원 생성
-    pout.createDimension("Time", None)
-    pout.createDimension("DateStrLen", 19)
-    pout.createDimension("west_east", nx)
-    pout.createDimension("south_north", ny)
-    if len(plev) != 0:
-        pout.createDimension("bottom_top", len(plev))
+        # 글로벌 속성 복사
+        _copy_global_attrs(fin, pout, plev, ncout)
 
-    # 기본 변수
-    basic_pres = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'HGT']
-    _write_basic_vars(fin, pout, basic_pres, comp_opts)
+        # 차원 생성
+        pout.createDimension("Time", None)
+        pout.createDimension("DateStrLen", 19)
+        pout.createDimension("west_east", nx)
+        pout.createDimension("south_north", ny)
+        if len(plev) != 0:
+            pout.createDimension("bottom_top", len(plev))
 
-    # PLEV 변수
-    if len(plev) != 0:
-        plev_var = pout.createVariable("PLEV", 'f', (u'bottom_top',), **comp_opts)
-        plev_var.setncatts({"description": "Pressure Levels", "units": "hPa"})
-        plev_var[:] = plev[:]
+        # 기본 변수
+        basic_pres = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'HGT']
+        _write_basic_vars(fin, pout, basic_pres, comp_opts)
 
-    # 3D 변수
-    dims_3d = (u'Time', u'bottom_top', u'south_north', u'west_east')
-    for key, data in plev_3d.items():
-        write_variable_with_packing(
-            pout, key.upper(), data.values, dims_3d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # PLEV 변수
+        if len(plev) != 0:
+            plev_var = pout.createVariable("PLEV", 'f', (u'bottom_top',), **comp_opts)
+            plev_var.setncatts({"description": "Pressure Levels", "units": "hPa"})
+            plev_var[:] = plev[:]
 
-    # Q 변수 (혼합비)
-    for key, data in plev_q.items():
-        write_variable_with_packing(
-            pout, key.upper(), data.values, dims_3d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # 3D 변수
+        dims_3d = (u'Time', u'bottom_top', u'south_north', u'west_east')
+        for key, data in plev_3d.items():
+            write_variable_with_packing(
+                pout, key.upper(), data.values, dims_3d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    # QN 변수 (수농도)
-    for key, data in plev_qn.items():
-        write_variable_with_packing(
-            pout, key.upper(), data.values, dims_3d, dict(data.attrs),
-            comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
-        )
+        # Q 변수 (혼합비)
+        for key, data in plev_q.items():
+            write_variable_with_packing(
+                pout, key.upper(), data.values, dims_3d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
 
-    pout.close()
-    print(f"  PRES file completed")
+        # QN 변수 (수농도)
+        for key, data in plev_qn.items():
+            write_variable_with_packing(
+                pout, key.upper(), data.values, dims_3d, dict(data.attrs),
+                comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
+            )
+
+        pout.close()
+        print(f"  PRES file completed")
+
+    finally:
+        # =====================================================================
+        # OMP 스레드 복구: 원래 설정으로 되돌리기
+        # =====================================================================
+        if single_thread_write:
+            if original_omp is not None:
+                os.environ['OMP_NUM_THREADS'] = original_omp
+                print(f"  [OMP] Thread count restored to {original_omp}")
+            elif 'OMP_NUM_THREADS' in os.environ:
+                del os.environ['OMP_NUM_THREADS']
+                print(f"  [OMP] Thread count setting removed")
 
 
 def _copy_global_attrs(fin, fout, plev, ncout):
