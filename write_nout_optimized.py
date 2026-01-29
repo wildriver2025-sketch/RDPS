@@ -8,29 +8,29 @@ from typing import Optional, Dict, Tuple
 EXCLUDE_ATTRIBUTES = ['FieldType', 'MemoryOrder', 'stagger']
 
 # =============================================================================
-# FIXED PACKING PARAMETERS - 파일 크기 일관성을 위한 고정 스케일/오프셋
+# FIXED PACKING PARAMETERS - Fixed scale/offset for consistent file sizes
 # =============================================================================
-# 각 변수별로 물리적으로 의미 있는 범위를 기반으로 고정값 설정
-# scale_factor: 정밀도 (작을수록 정밀)
-# add_offset: 데이터 중심값 (물리적 범위의 중간값)
+# Fixed values based on physically meaningful ranges for each variable
+# scale_factor: precision (smaller = more precise)
+# add_offset: data center value (middle of physical range)
 
 FIXED_PACKING_PARAMS = {
-    # 온도 관련 (K) - 범위: 180~340K
+    # Temperature (K) - range: 180~340K
     'T': {'scale': 0.01, 'offset': 260.0},
     'T2': {'scale': 0.01, 'offset': 280.0},
     'TSK': {'scale': 0.01, 'offset': 280.0},
     'TSLB': {'scale': 0.01, 'offset': 280.0},
     'SST': {'scale': 0.01, 'offset': 290.0},
 
-    # 상대습도 (%) - 범위: 0~100%
+    # Relative humidity (%) - range: 0~100%
     'RH': {'scale': 0.01, 'offset': 50.0},
     'RH2': {'scale': 0.01, 'offset': 50.0},
 
-    # 지위고도 (m) - 범위: -500 ~ 20000m
+    # Geopotential height (m) - range: -500 ~ 20000m
     'GPH': {'scale': 1.0, 'offset': 5000.0},
     'HGT': {'scale': 0.1, 'offset': 500.0},
 
-    # 바람 (m/s) - 범위: -100 ~ 100 m/s
+    # Wind (m/s) - range: -100 ~ 100 m/s
     'U': {'scale': 0.01, 'offset': 0.0},
     'V': {'scale': 0.01, 'offset': 0.0},
     'W': {'scale': 0.0001, 'offset': 0.0},
@@ -44,11 +44,11 @@ FIXED_PACKING_PARAMS = {
     'V220': {'scale': 0.01, 'offset': 0.0},
     'GUST': {'scale': 0.01, 'offset': 15.0},
 
-    # 기압 (Pa) - 범위: 50000 ~ 110000 Pa
+    # Pressure (Pa) - range: 50000 ~ 110000 Pa
     'PSFC': {'scale': 1.0, 'offset': 100000.0},
     'MSLP': {'scale': 1.0, 'offset': 101325.0},
 
-    # 강수량 (mm) - 범위: 0 ~ 500mm
+    # Precipitation (mm) - range: 0 ~ 500mm
     'RAIN': {'scale': 0.01, 'offset': 50.0},
     'RAINNC': {'scale': 0.01, 'offset': 50.0},
     'RAINC': {'scale': 0.01, 'offset': 10.0},
@@ -56,7 +56,7 @@ FIXED_PACKING_PARAMS = {
     'GRAUPEL': {'scale': 0.01, 'offset': 5.0},
     'TOTAL_RAIN': {'scale': 0.01, 'offset': 50.0},
 
-    # 혼합비 (kg/kg) - 범위: 0 ~ 0.05 kg/kg
+    # Mixing ratio (kg/kg) - range: 0 ~ 0.05 kg/kg
     'QVAPOR': {'scale': 1e-7, 'offset': 0.01},
     'QCLOUD': {'scale': 1e-7, 'offset': 0.0001},
     'QRAIN': {'scale': 1e-7, 'offset': 0.0001},
@@ -64,13 +64,13 @@ FIXED_PACKING_PARAMS = {
     'QSNOW': {'scale': 1e-7, 'offset': 0.0001},
     'QGRAUP': {'scale': 1e-7, 'offset': 0.0001},
 
-    # 수농도 (#/kg)
+    # Number concentration (#/kg)
     'QNCLOUD': {'scale': 0.001, 'offset': 1e8},
     'QNRAIN': {'scale': 0.001, 'offset': 1e6},
     'QNICE': {'scale': 0.001, 'offset': 1e6},
     'QNSNOW': {'scale': 0.001, 'offset': 1e6},
 
-    # 복사 플럭스 (W/m2) - 범위: 0 ~ 1400 W/m2
+    # Radiation flux (W/m2) - range: 0 ~ 1400 W/m2
     'SWDDIR2': {'scale': 0.1, 'offset': 400.0},
     'SWDDIF2': {'scale': 0.1, 'offset': 200.0},
     'SWDDNI2': {'scale': 0.1, 'offset': 500.0},
@@ -82,17 +82,17 @@ FIXED_PACKING_PARAMS = {
     'LCL': {'scale': 1.0, 'offset': 1000.0},
     'LFC': {'scale': 1.0, 'offset': 2000.0},
 
-    # 경계층 높이 (m)
+    # Boundary layer height (m)
     'PBLH': {'scale': 1.0, 'offset': 1000.0},
 
-    # 시정 (m) - 범위: 0 ~ 50000m
+    # Visibility (m) - range: 0 ~ 50000m
     'VIS': {'scale': 1.0, 'offset': 20000.0},
     'VISB': {'scale': 1.0, 'offset': 20000.0},
 
-    # 토양 수분 (m3/m3)
+    # Soil moisture (m3/m3)
     'SMOIS': {'scale': 0.0001, 'offset': 0.3},
 
-    # 구름량 (fraction)
+    # Cloud fraction (fraction)
     'CLDFRA': {'scale': 0.0001, 'offset': 0.5},
     'CLDFRAC2D': {'scale': 0.0001, 'offset': 0.5},
     'LOW_CLD': {'scale': 0.0001, 'offset': 0.5},
@@ -100,65 +100,69 @@ FIXED_PACKING_PARAMS = {
     'HIGH_CLD': {'scale': 0.0001, 'offset': 0.5},
     'TOTAL_CLD': {'scale': 0.0001, 'offset': 0.5},
 
-    # 오메가 (Pa/s)
+    # Omega (Pa/s)
     'OMEGA': {'scale': 0.001, 'offset': 0.0},
 
-    # 와도
+    # Vorticity
     'AVO': {'scale': 1e-7, 'offset': 0.0},
     'PVO': {'scale': 1e-9, 'offset': 0.0},
 
-    # 레이더 반사도 (dBZ)
+    # Radar reflectivity (dBZ)
     'DBZ': {'scale': 0.1, 'offset': 20.0},
 
-    # 상당온위 (K)
+    # Equivalent potential temperature (K)
     'ETH': {'scale': 0.01, 'offset': 320.0},
 }
 
-# 기본값 (목록에 없는 변수용)
+# Default values for unlisted variables
 DEFAULT_SCALE = 0.01
 DEFAULT_OFFSET = 0.0
 
 
 def get_optimal_chunks(dims: tuple, dim_names: tuple) -> tuple:
     """
-    차원 크기에 따른 최적 청크 크기 계산
+    Calculate optimal chunk sizes based on dimension sizes.
+
+    Chunking strategy:
+    - Time dimension: 1 (single timestep per chunk)
+    - Vertical levels (bottom_top, soil): 1 (single level per chunk for efficient level-wise access)
+    - Horizontal dimensions: full grid size (efficient for whole-field operations)
 
     Parameters:
     -----------
     dims : tuple
-        각 차원의 크기 (예: (1, 20, 700, 1000))
+        Size of each dimension (e.g., (1, 20, 700, 1000))
     dim_names : tuple
-        차원 이름들 (예: ('Time', 'bottom_top', 'south_north', 'west_east'))
+        Dimension names (e.g., ('Time', 'bottom_top', 'south_north', 'west_east'))
 
     Returns:
     --------
-    tuple : 최적화된 청크 크기
+    tuple : Optimized chunk sizes
     """
     chunks = []
     for dim_size, dim_name in zip(dims, dim_names):
         if 'Time' in dim_name:
+            # Single timestep per chunk
             chunks.append(1)
         elif 'bottom_top' in dim_name or 'soil' in dim_name:
-            # 연직 레벨은 전체를 한 청크로
-            chunks.append(min(dim_size, dim_size))
-        elif 'south_north' in dim_name or 'west_east' in dim_name:
-            # 수평 방향은 256 또는 차원 크기
-            chunks.append(min(256, dim_size))
+            # Single vertical level per chunk for efficient pressure-level access
+            chunks.append(1)
         else:
-            chunks.append(min(64, dim_size))
+            # Full horizontal grid size for whole-field operations
+            chunks.append(dim_size)
     return tuple(chunks)
 
 
 def get_fixed_packing_params(var_name: str, dtype: str = 'i2') -> Tuple[float, float]:
     """
-    변수별 고정 packing 파라미터 반환
+    Get fixed packing parameters for a variable.
 
     Parameters:
     -----------
     var_name : str
-        변수 이름 (대문자)
+        Variable name (uppercase)
     dtype : str
-        패킹 데이터 타입
+        Packing data type
 
     Returns:
     --------
@@ -170,7 +174,7 @@ def get_fixed_packing_params(var_name: str, dtype: str = 'i2') -> Tuple[float, f
         params = FIXED_PACKING_PARAMS[var_upper]
         return params['scale'], params['offset']
     else:
-        # 기본값 사용
+        # Use default values
         return DEFAULT_SCALE, DEFAULT_OFFSET
 
 
@@ -181,24 +185,24 @@ def calculate_packing_params_safe(
     use_fixed: bool = True
 ) -> Tuple[float, float]:
     """
-    안전한 packing 파라미터 계산 (고정값 우선, 필요시 동적 계산)
+    Calculate packing parameters safely (fixed values preferred, dynamic fallback).
 
     Parameters:
     -----------
     data : np.ndarray
-        패킹할 데이터
+        Data to be packed
     var_name : str
-        변수 이름
+        Variable name
     dtype : str
-        패킹 데이터 타입
+        Packing data type
     use_fixed : bool
-        고정 파라미터 사용 여부 (True 권장)
+        Whether to use fixed parameters (True recommended)
 
     Returns:
     --------
     tuple : (scale_factor, add_offset)
     """
-    # dtype별 정수 범위
+    # Integer range for each dtype
     dtype_ranges = {
         'i1': (-127, 127),
         'i2': (-32767, 32767),
@@ -209,7 +213,7 @@ def calculate_packing_params_safe(
     if use_fixed:
         scale, offset = get_fixed_packing_params(var_name, dtype)
 
-        # 데이터가 범위 내에 들어가는지 검증
+        # Validate that data fits within range
         if np.ma.isMaskedArray(data):
             data_min = np.ma.min(data)
             data_max = np.ma.max(data)
@@ -221,25 +225,25 @@ def calculate_packing_params_safe(
             packed_min = (data_min - offset) / scale
             packed_max = (data_max - offset) / scale
 
-            # 범위 초과시 scale 조정 (offset은 유지)
+            # Adjust scale if data exceeds range (keep offset fixed)
             if packed_min < n_min or packed_max > n_max:
                 data_range = data_max - data_min
                 if data_range > 0:
-                    # offset은 고정, scale만 조정
+                    # Keep offset fixed, only adjust scale
                     required_scale = max(
                         abs(data_max - offset) / n_max,
                         abs(data_min - offset) / abs(n_min)
                     )
-                    scale = max(scale, required_scale * 1.01)  # 1% 여유
+                    scale = max(scale, required_scale * 1.01)  # 1% margin
 
         return scale, offset
     else:
-        # 기존 동적 계산 방식 (권장하지 않음)
+        # Legacy dynamic calculation (not recommended)
         return _calculate_dynamic_packing(data, dtype)
 
 
 def _calculate_dynamic_packing(data: np.ndarray, dtype: str = 'i2') -> Tuple[float, float]:
-    """기존 동적 packing 계산 (호환성용)"""
+    """Legacy dynamic packing calculation (for backward compatibility)."""
     dtype_ranges = {
         'i1': (-127, 127),
         'i2': (-32767, 32767),
@@ -279,39 +283,39 @@ def write_variable_with_packing(
     use_fixed_packing: bool = True
 ):
     """
-    변수를 NetCDF 파일에 기록 (packing 옵션 포함)
+    Write a variable to NetCDF file with packing options.
 
     Parameters:
     -----------
     nc_file : Dataset
-        NetCDF 파일 객체
+        NetCDF file object
     varname : str
-        변수 이름
+        Variable name
     data : np.ndarray
-        기록할 데이터
+        Data to write
     dimensions : tuple
-        차원 튜플
+        Dimension tuple
     attrs : dict
-        속성 딕셔너리
+        Attribute dictionary
     comp_opts : dict
-        압축 옵션
+        Compression options
     packing : bool
-        packing 사용 여부
+        Whether to use packing
     packing_dtype : str
-        packing 데이터 타입
+        Packing data type
     fill_value : int
-        결측값
+        Missing value
     use_fixed_packing : bool
-        고정 packing 파라미터 사용 여부
+        Whether to use fixed packing parameters
     """
-    # 차원 크기 계산
+    # Calculate dimension sizes
     dim_sizes = tuple(nc_file.dimensions[d].size if nc_file.dimensions[d].size else 1
                       for d in dimensions)
 
-    # 최적 청크 크기 계산
+    # Calculate optimal chunk sizes
     chunks = get_optimal_chunks(dim_sizes, dimensions)
 
-    # 압축 옵션에 청크 추가
+    # Add chunks to compression options
     write_opts = comp_opts.copy()
     write_opts['chunksizes'] = chunks
 
@@ -331,11 +335,11 @@ def write_variable_with_packing(
             varname, data.dtype, dimensions, **write_opts
         )
 
-    # 속성 설정 (packing 관련 및 제외 속성 필터링)
+    # Set attributes (filter out packing-related and excluded attributes)
     exclude_keys = ["_FillValue", "missing_value", "scale_factor", "add_offset"] + EXCLUDE_ATTRIBUTES
     var.setncatts({k: v for k, v in attrs.items() if k not in exclude_keys})
 
-    # 데이터 기록
+    # Write data
     var[:] = data
 
 
@@ -349,51 +353,51 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
                 use_fixed_packing=True,
                 single_thread_write=True):
     """
-    WRF 출력을 NetCDF로 저장 (최적화 버전)
+    Save WRF output to NetCDF (optimized version).
 
     Parameters:
     -----------
     fin : Dataset
-        입력 WRF 파일
+        Input WRF file
     ncout : str
-        출력 파일 경로 (확장자 제외)
+        Output file path (without extension)
     fhr : int/str
-        예보 시간
+        Forecast hour
     atim : str
-        분석 시간
+        Analysis time
     vtim : str
-        유효 시간
+        Valid time
     var_soil, var_2d, var_engy, var_post : dict
-        각종 변수 딕셔너리
+        Variable dictionaries
     plev : list
-        기압면 리스트
+        Pressure level list
     plev_3d, plev_q, plev_qn : dict
-        3D 변수 딕셔너리
+        3D variable dictionaries
     compression : str
-        압축 방식 ('deflate' or None)
+        Compression method ('deflate' or None)
     deflate_level : int
-        압축 레벨 (1-9)
+        Compression level (1-9)
     shuffle : bool
-        shuffle 필터 사용
+        Use shuffle filter
     packing : bool
-        packing 사용
+        Use packing
     packing_dtype : str
-        packing 데이터 타입
+        Packing data type
     use_fixed_packing : bool
-        고정 packing 파라미터 사용 (True 권장 - 파일 크기 일관성)
+        Use fixed packing parameters (True recommended for consistent file sizes)
     single_thread_write : bool
-        파일 쓰기 시 단일 스레드 사용 (True 권장 - HDF5 thread safety)
+        Use single thread for file writing (True recommended for HDF5 thread safety)
 
     Note:
     -----
-    HDF5/netCDF4 라이브러리는 기본적으로 thread-safe하지 않습니다.
-    OpenMP 환경(OMP_NUM_THREADS > 1)에서 파일 쓰기 시 데이터 손상이나
-    파일 크기 불규칙 문제가 발생할 수 있습니다.
-    single_thread_write=True로 설정하면 파일 쓰기 동안만 단일 스레드로 전환합니다.
+    HDF5/netCDF4 library is not thread-safe by default.
+    In OpenMP environments (OMP_NUM_THREADS > 1), file writing may cause
+    data corruption or inconsistent file sizes.
+    Setting single_thread_write=True switches to single thread during file I/O.
     """
 
     # ==========================================================================
-    # OMP 스레드 관리: 파일 쓰기 전 단일 스레드로 전환
+    # OMP thread management: switch to single thread before file writing
     # ==========================================================================
     original_omp = None
     if single_thread_write:
@@ -402,7 +406,7 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         print(f"  [OMP] Thread count set to 1 for safe file I/O (was: {original_omp})")
 
     try:
-        # Time 차원 추가
+        # Add Time dimension to all variables
         for key in var_soil:
             var_soil[key] = var_soil[key].squeeze().expand_dims("Time")
         for key in var_2d:
@@ -418,7 +422,7 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         for key in plev_qn:
             plev_qn[key] = plev_qn[key].squeeze().expand_dims("Time")
 
-        # 압축 옵션 (chunksizes는 변수별로 설정)
+        # Compression options (chunksizes set per variable)
         comp_opts = {}
         if compression in ['deflate', 'zlib']:
             comp_opts = {
@@ -427,28 +431,28 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
                 'shuffle': shuffle
             }
 
-        # fill_value
+        # Fill value for packing dtype
         fill_values = {'i1': -127, 'i2': -32767, 'i4': -2147483647}
         fill_value = fill_values.get(packing_dtype, -32767)
 
-        # 출력 파일 경로
+        # Output file paths
         out_unis = ncout + '_unis_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
         out_pres = ncout + '_pres_h' + ("%03d" % int(fhr)) + '.' + atim + '.nc'
 
-        # 그리드 크기 (청크 계산용)
+        # Grid size for chunk calculation
         nx = int(fin.getncattr("WEST-EAST_GRID_DIMENSION")) - 1
         ny = int(fin.getncattr("SOUTH-NORTH_GRID_DIMENSION")) - 1
 
         # =====================================================================
-        # UNIS 파일 (단일면 변수) 먼저 완전히 기록 후 닫기
+        # UNIS file (single-level variables) - write completely then close
         # =====================================================================
         print(f"  Writing UNIS file: {out_unis}")
         uout = Dataset(out_unis, "w", format='NETCDF4')
 
-        # 글로벌 속성 복사
+        # Copy global attributes
         _copy_global_attrs(fin, uout, plev, ncout)
 
-        # 차원 생성
+        # Create dimensions
         uout.createDimension("Time", None)
         uout.createDimension("DateStrLen", 19)
         uout.createDimension("west_east", nx)
@@ -456,18 +460,18 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         if len(plev) != 0:
             uout.createDimension("bottom_top", len(plev))
 
-        # 토양층 차원
+        # Soil layer dimension
         sf_physics = fin.getncattr("SF_SURFACE_PHYSICS")
         if sf_physics == 1:
             uout.createDimension("soil_layers_stag", 5)
         elif sf_physics == 2:
             uout.createDimension("soil_layers_stag", 4)
 
-        # 기본 변수 (Times, XLAT, XLONG 등)
+        # Basic variables (Times, XLAT, XLONG, etc.)
         basic_unis = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'ZS', 'DZS', 'HGT']
         _write_basic_vars(fin, uout, basic_unis, comp_opts)
 
-        # 2D 변수
+        # 2D variables
         dims_2d = (u'Time', u'south_north', u'west_east')
         for key, data in var_2d.items():
             write_variable_with_packing(
@@ -475,21 +479,21 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
                 comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
             )
 
-        # Energy 변수
+        # Energy variables
         for key, data in var_engy.items():
             write_variable_with_packing(
                 uout, key.upper(), data.values, dims_2d, dict(data.attrs),
                 comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
             )
 
-        # Post 변수
+        # Post-processed variables
         for key, data in var_post.items():
             write_variable_with_packing(
                 uout, key.upper(), data.values, dims_2d, dict(data.attrs),
                 comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
             )
 
-        # Soil 변수
+        # Soil variables
         dims_soil = (u'Time', u'soil_layers_stag', u'south_north', u'west_east')
         for key, data in var_soil.items():
             write_variable_with_packing(
@@ -501,15 +505,15 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         print(f"  UNIS file completed")
 
         # =====================================================================
-        # PRES 파일 (기압면 변수) 기록
+        # PRES file (pressure-level variables)
         # =====================================================================
         print(f"  Writing PRES file: {out_pres}")
         pout = Dataset(out_pres, "w", format='NETCDF4')
 
-        # 글로벌 속성 복사
+        # Copy global attributes
         _copy_global_attrs(fin, pout, plev, ncout)
 
-        # 차원 생성
+        # Create dimensions
         pout.createDimension("Time", None)
         pout.createDimension("DateStrLen", 19)
         pout.createDimension("west_east", nx)
@@ -517,17 +521,17 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
         if len(plev) != 0:
             pout.createDimension("bottom_top", len(plev))
 
-        # 기본 변수
+        # Basic variables
         basic_pres = ['Times', 'XLAT', 'XLONG', 'XTIME', 'LANDMASK', 'HGT']
         _write_basic_vars(fin, pout, basic_pres, comp_opts)
 
-        # PLEV 변수
+        # PLEV variable
         if len(plev) != 0:
             plev_var = pout.createVariable("PLEV", 'f', (u'bottom_top',), **comp_opts)
             plev_var.setncatts({"description": "Pressure Levels", "units": "hPa"})
             plev_var[:] = plev[:]
 
-        # 3D 변수
+        # 3D variables
         dims_3d = (u'Time', u'bottom_top', u'south_north', u'west_east')
         for key, data in plev_3d.items():
             write_variable_with_packing(
@@ -535,14 +539,14 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
                 comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
             )
 
-        # Q 변수 (혼합비)
+        # Moisture mixing ratio variables
         for key, data in plev_q.items():
             write_variable_with_packing(
                 pout, key.upper(), data.values, dims_3d, dict(data.attrs),
                 comp_opts, packing, packing_dtype, fill_value, use_fixed_packing
             )
 
-        # QN 변수 (수농도)
+        # Number concentration variables
         for key, data in plev_qn.items():
             write_variable_with_packing(
                 pout, key.upper(), data.values, dims_3d, dict(data.attrs),
@@ -554,7 +558,7 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
 
     finally:
         # =====================================================================
-        # OMP 스레드 복구: 원래 설정으로 되돌리기
+        # OMP thread restoration: restore original settings
         # =====================================================================
         if single_thread_write:
             if original_omp is not None:
@@ -566,7 +570,7 @@ def create_nout(fin, ncout, fhr, atim, vtim, var_soil, var_2d, var_engy,
 
 
 def _copy_global_attrs(fin, fout, plev, ncout):
-    """글로벌 속성 복사"""
+    """Copy global attributes from input to output file."""
     for ganame in fin.ncattrs():
         if ganame == "TITLE":
             prefix = ncout.split("/")[-1][:4]
@@ -587,17 +591,17 @@ def _copy_global_attrs(fin, fout, plev, ncout):
 
 
 def _write_basic_vars(fin, fout, var_list, comp_opts):
-    """기본 변수 (Times, XLAT 등) 기록"""
+    """Write basic variables (Times, XLAT, etc.) to output file."""
     for vname, varin in fin.variables.items():
         if vname in var_list:
-            # 차원 크기 계산 및 청크 설정
+            # Calculate dimension sizes and set chunks
             dim_sizes = tuple(
                 fout.dimensions[d].size if d in fout.dimensions and fout.dimensions[d].size
                 else varin.shape[varin.dimensions.index(d)]
                 for d in varin.dimensions if d in fout.dimensions
             )
 
-            # 사용 가능한 차원만 필터링
+            # Filter to valid dimensions only
             valid_dims = tuple(d for d in varin.dimensions if d in fout.dimensions)
 
             if len(valid_dims) > 0 and all(d in fout.dimensions for d in valid_dims):
@@ -618,7 +622,7 @@ def _write_basic_vars(fin, fout, var_list, comp_opts):
 
 
 # =============================================================================
-# 기존 호환성을 위한 calculate_packing_params 함수 유지
+# Legacy function for backward compatibility
 # =============================================================================
 def calculate_packing_params(
     data: np.ndarray,
@@ -629,9 +633,9 @@ def calculate_packing_params(
     use_default_precision: bool = True
 ) -> tuple:
     """
-    기존 호환성을 위한 packing 파라미터 계산 함수
+    Legacy packing parameter calculation function for backward compatibility.
 
-    Note: 새 코드에서는 calculate_packing_params_safe() 사용 권장
+    Note: For new code, use calculate_packing_params_safe() instead.
     """
-    # 기존 동적 계산 방식 유지
+    # Use legacy dynamic calculation
     return _calculate_dynamic_packing(data, dtype)
