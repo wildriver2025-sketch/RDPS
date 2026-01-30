@@ -15,103 +15,129 @@ EXCLUDE_ATTRIBUTES = ['FieldType', 'MemoryOrder', 'stagger']
 # add_offset: data center value (middle of physical range)
 
 FIXED_PACKING_PARAMS = {
-    # Temperature (K) - range: 180~340K
-    'T': {'scale': 0.01, 'offset': 260.0},
-    'T2': {'scale': 0.01, 'offset': 280.0},
-    'TSK': {'scale': 0.01, 'offset': 280.0},
-    'TSLB': {'scale': 0.01, 'offset': 280.0},
-    'SST': {'scale': 0.01, 'offset': 290.0},
+    # ==========================================================================
+    # Scale calculation: scale = max_range / 32767 (with safety margin)
+    # i2 range: -32767 ~ 32767, so max representable range = scale * 65534
+    # ==========================================================================
 
-    # Relative humidity (%) - range: 0~100%
-    'RH': {'scale': 0.01, 'offset': 50.0},
-    'RH2': {'scale': 0.01, 'offset': 50.0},
+    # Temperature (K) - physical range: 180~340K (160K span)
+    # scale = 160 / 65534 ≈ 0.00244, use 0.005 for margin
+    'T': {'scale': 0.005, 'offset': 260.0},      # covers 260 ± 163K
+    'T2': {'scale': 0.005, 'offset': 280.0},     # covers 280 ± 163K
+    'TSK': {'scale': 0.005, 'offset': 280.0},
+    'TSLB': {'scale': 0.005, 'offset': 280.0},
+    'SST': {'scale': 0.005, 'offset': 290.0},
 
-    # Geopotential height (m) - range: -500 ~ 20000m
-    'GPH': {'scale': 1.0, 'offset': 5000.0},
-    'HGT': {'scale': 0.1, 'offset': 500.0},
+    # Relative humidity (%) - physical range: 0~100%
+    # scale = 100 / 65534 ≈ 0.00153, use 0.005 for margin
+    'RH': {'scale': 0.005, 'offset': 50.0},      # covers 0~100% and beyond
+    'RH2': {'scale': 0.005, 'offset': 50.0},
 
-    # Wind (m/s) - range: -100 ~ 100 m/s
-    'U': {'scale': 0.01, 'offset': 0.0},
-    'V': {'scale': 0.01, 'offset': 0.0},
-    'W': {'scale': 0.0001, 'offset': 0.0},
-    'U10': {'scale': 0.01, 'offset': 0.0},
-    'V10': {'scale': 0.01, 'offset': 0.0},
-    'U80': {'scale': 0.01, 'offset': 0.0},
-    'V80': {'scale': 0.01, 'offset': 0.0},
-    'U140': {'scale': 0.01, 'offset': 0.0},
-    'V140': {'scale': 0.01, 'offset': 0.0},
-    'U220': {'scale': 0.01, 'offset': 0.0},
-    'V220': {'scale': 0.01, 'offset': 0.0},
-    'GUST': {'scale': 0.01, 'offset': 15.0},
+    # Geopotential height (m) - physical range: -500 ~ 20000m
+    # scale = 20500 / 65534 ≈ 0.31, use 0.5 for margin
+    'GPH': {'scale': 0.5, 'offset': 10000.0},    # covers -22K ~ +42K m
+    'HGT': {'scale': 0.1, 'offset': 1000.0},     # terrain: covers -2K ~ +4K m
 
-    # Pressure (Pa) - range: 50000 ~ 110000 Pa
-    'PSFC': {'scale': 1.0, 'offset': 100000.0},
-    'MSLP': {'scale': 1.0, 'offset': 101325.0},
+    # Horizontal wind (m/s) - physical range: -150 ~ +150 m/s (jet stream)
+    # scale = 300 / 65534 ≈ 0.0046, use 0.005 for margin
+    'U': {'scale': 0.005, 'offset': 0.0},        # covers ±163 m/s
+    'V': {'scale': 0.005, 'offset': 0.0},
+    'U10': {'scale': 0.005, 'offset': 0.0},
+    'V10': {'scale': 0.005, 'offset': 0.0},
+    'U80': {'scale': 0.005, 'offset': 0.0},
+    'V80': {'scale': 0.005, 'offset': 0.0},
+    'U140': {'scale': 0.005, 'offset': 0.0},
+    'V140': {'scale': 0.005, 'offset': 0.0},
+    'U220': {'scale': 0.005, 'offset': 0.0},
+    'V220': {'scale': 0.005, 'offset': 0.0},
+    'GUST': {'scale': 0.005, 'offset': 25.0},    # covers 0~50 m/s gusts
 
-    # Precipitation (mm) - range: 0 ~ 500mm
-    'RAIN': {'scale': 0.01, 'offset': 50.0},
-    'RAINNC': {'scale': 0.01, 'offset': 50.0},
-    'RAINC': {'scale': 0.01, 'offset': 10.0},
-    'SNOW': {'scale': 0.01, 'offset': 10.0},
-    'GRAUPEL': {'scale': 0.01, 'offset': 5.0},
-    'TOTAL_RAIN': {'scale': 0.01, 'offset': 50.0},
+    # Vertical velocity (m/s) - physical range: -50 ~ +50 m/s (severe convection)
+    # scale = 100 / 65534 ≈ 0.00153, use 0.002 for margin (precision vs range trade-off)
+    'W': {'scale': 0.002, 'offset': 0.0},        # covers ±65 m/s
 
-    # Mixing ratio (kg/kg) - range: 0 ~ 0.05 kg/kg
-    'QVAPOR': {'scale': 1e-7, 'offset': 0.01},
-    'QCLOUD': {'scale': 1e-7, 'offset': 0.0001},
-    'QRAIN': {'scale': 1e-7, 'offset': 0.0001},
-    'QICE': {'scale': 1e-7, 'offset': 0.0001},
-    'QSNOW': {'scale': 1e-7, 'offset': 0.0001},
-    'QGRAUP': {'scale': 1e-7, 'offset': 0.0001},
+    # Pressure (Pa) - physical range: 30000 ~ 110000 Pa
+    # scale = 80000 / 65534 ≈ 1.22, use 2.0 for margin
+    'PSFC': {'scale': 2.0, 'offset': 100000.0},  # covers 35K ~ 165K Pa
+    'MSLP': {'scale': 2.0, 'offset': 101325.0},
 
-    # Number concentration (#/kg)
-    'QNCLOUD': {'scale': 0.001, 'offset': 1e8},
-    'QNRAIN': {'scale': 0.001, 'offset': 1e6},
-    'QNICE': {'scale': 0.001, 'offset': 1e6},
-    'QNSNOW': {'scale': 0.001, 'offset': 1e6},
+    # Precipitation (mm) - physical range: 0 ~ 1000mm (extreme events)
+    # scale = 1000 / 65534 ≈ 0.015, use 0.02 for margin
+    'RAIN': {'scale': 0.02, 'offset': 500.0},    # covers 0~1300 mm
+    'RAINNC': {'scale': 0.02, 'offset': 500.0},
+    'RAINC': {'scale': 0.02, 'offset': 200.0},
+    'SNOW': {'scale': 0.02, 'offset': 200.0},
+    'GRAUPEL': {'scale': 0.02, 'offset': 100.0},
+    'TOTAL_RAIN': {'scale': 0.02, 'offset': 500.0},
 
-    # Radiation flux (W/m2) - range: 0 ~ 1400 W/m2
-    'SWDDIR2': {'scale': 0.1, 'offset': 400.0},
-    'SWDDIF2': {'scale': 0.1, 'offset': 200.0},
-    'SWDDNI2': {'scale': 0.1, 'offset': 500.0},
-    'OLR': {'scale': 0.1, 'offset': 250.0},
+    # Mixing ratio (kg/kg) - physical range: 0 ~ 0.05 kg/kg
+    # scale = 0.05 / 65534 ≈ 7.6e-7, use 1e-6 for margin
+    # Note: Using 1e-6 instead of 1e-7 to ensure full range coverage
+    'QVAPOR': {'scale': 1e-6, 'offset': 0.025},  # covers 0~0.09 kg/kg
+    'QCLOUD': {'scale': 1e-6, 'offset': 0.005},  # covers 0~0.07 kg/kg
+    'QRAIN': {'scale': 1e-6, 'offset': 0.005},
+    'QICE': {'scale': 1e-6, 'offset': 0.005},
+    'QSNOW': {'scale': 1e-6, 'offset': 0.005},
+    'QGRAUP': {'scale': 1e-6, 'offset': 0.005},
 
-    # CAPE/CIN (J/kg)
-    'MCAPE': {'scale': 1.0, 'offset': 1000.0},
-    'MCIN': {'scale': 0.1, 'offset': -50.0},
-    'LCL': {'scale': 1.0, 'offset': 1000.0},
-    'LFC': {'scale': 1.0, 'offset': 2000.0},
+    # Number concentration (#/kg) - highly variable, use large range
+    # scale chosen to cover typical range with margin
+    'QNCLOUD': {'scale': 1e4, 'offset': 1e8},    # covers 0~6.5e8 #/kg
+    'QNRAIN': {'scale': 1e2, 'offset': 1e6},     # covers 0~6.5e6 #/kg
+    'QNICE': {'scale': 1e2, 'offset': 1e6},
+    'QNSNOW': {'scale': 1e2, 'offset': 1e6},
 
-    # Boundary layer height (m)
-    'PBLH': {'scale': 1.0, 'offset': 1000.0},
+    # Radiation flux (W/m2) - physical range: 0 ~ 1400 W/m2
+    # scale = 1400 / 65534 ≈ 0.021, use 0.05 for margin
+    'SWDDIR2': {'scale': 0.05, 'offset': 700.0},  # covers 0~1400+ W/m2
+    'SWDDIF2': {'scale': 0.05, 'offset': 400.0},
+    'SWDDNI2': {'scale': 0.05, 'offset': 700.0},
+    'OLR': {'scale': 0.02, 'offset': 250.0},      # covers 0~500 W/m2
 
-    # Visibility (m) - range: 0 ~ 50000m
-    'VIS': {'scale': 1.0, 'offset': 20000.0},
-    'VISB': {'scale': 1.0, 'offset': 20000.0},
+    # CAPE/CIN (J/kg) - physical range: 0~6000 J/kg (CAPE), -500~0 (CIN)
+    # scale = 6000 / 65534 ≈ 0.092, use 0.2 for margin
+    'MCAPE': {'scale': 0.2, 'offset': 3000.0},   # covers 0~6500+ J/kg
+    'MCIN': {'scale': 0.02, 'offset': -250.0},   # covers -900~0 J/kg
+    'LCL': {'scale': 0.5, 'offset': 5000.0},     # covers 0~20000 m
+    'LFC': {'scale': 0.5, 'offset': 5000.0},
 
-    # Soil moisture (m3/m3)
-    'SMOIS': {'scale': 0.0001, 'offset': 0.3},
+    # Boundary layer height (m) - physical range: 0 ~ 5000m
+    # scale = 5000 / 65534 ≈ 0.076, use 0.2 for margin
+    'PBLH': {'scale': 0.2, 'offset': 2500.0},    # covers 0~6500+ m
 
-    # Cloud fraction (fraction)
-    'CLDFRA': {'scale': 0.0001, 'offset': 0.5},
-    'CLDFRAC2D': {'scale': 0.0001, 'offset': 0.5},
-    'LOW_CLD': {'scale': 0.0001, 'offset': 0.5},
-    'MID_CLD': {'scale': 0.0001, 'offset': 0.5},
-    'HIGH_CLD': {'scale': 0.0001, 'offset': 0.5},
-    'TOTAL_CLD': {'scale': 0.0001, 'offset': 0.5},
+    # Visibility (m) - physical range: 0 ~ 100000m
+    # scale = 100000 / 65534 ≈ 1.53, use 2.0 for margin
+    'VIS': {'scale': 2.0, 'offset': 50000.0},    # covers 0~100K+ m
+    'VISB': {'scale': 2.0, 'offset': 50000.0},
 
-    # Omega (Pa/s)
-    'OMEGA': {'scale': 0.001, 'offset': 0.0},
+    # Soil moisture (m3/m3) - physical range: 0 ~ 0.6
+    # scale = 0.6 / 65534 ≈ 9.2e-6, use 2e-5 for margin
+    'SMOIS': {'scale': 2e-5, 'offset': 0.3},     # covers 0~0.95 m3/m3
 
-    # Vorticity
-    'AVO': {'scale': 1e-7, 'offset': 0.0},
-    'PVO': {'scale': 1e-9, 'offset': 0.0},
+    # Cloud fraction (fraction) - physical range: 0 ~ 1.0
+    # scale = 1.0 / 65534 ≈ 1.5e-5, use 5e-5 for margin
+    'CLDFRA': {'scale': 5e-5, 'offset': 0.5},    # covers 0~1.0+
+    'CLDFRAC2D': {'scale': 5e-5, 'offset': 0.5},
+    'LOW_CLD': {'scale': 5e-5, 'offset': 0.5},
+    'MID_CLD': {'scale': 5e-5, 'offset': 0.5},
+    'HIGH_CLD': {'scale': 5e-5, 'offset': 0.5},
+    'TOTAL_CLD': {'scale': 5e-5, 'offset': 0.5},
 
-    # Radar reflectivity (dBZ)
-    'DBZ': {'scale': 0.1, 'offset': 20.0},
+    # Omega (Pa/s) - physical range: -10 ~ +10 Pa/s (strong convection)
+    # scale = 20 / 65534 ≈ 3e-4, use 5e-4 for margin
+    'OMEGA': {'scale': 5e-4, 'offset': 0.0},     # covers ±32 Pa/s
 
-    # Equivalent potential temperature (K)
-    'ETH': {'scale': 0.01, 'offset': 320.0},
+    # Vorticity - physical range varies widely
+    'AVO': {'scale': 1e-6, 'offset': 0.0},       # covers ±0.03 s-1
+    'PVO': {'scale': 1e-7, 'offset': 0.0},       # covers PVU range
+
+    # Radar reflectivity (dBZ) - physical range: -30 ~ 80 dBZ
+    # scale = 110 / 65534 ≈ 0.0017, use 0.005 for margin
+    'DBZ': {'scale': 0.005, 'offset': 25.0},     # covers -138~188 dBZ
+
+    # Equivalent potential temperature (K) - physical range: 280~400K
+    # scale = 120 / 65534 ≈ 0.0018, use 0.005 for margin
+    'ETH': {'scale': 0.005, 'offset': 340.0},    # covers 177~503 K
 }
 
 # Default values for unlisted variables
