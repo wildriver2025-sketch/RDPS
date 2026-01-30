@@ -40,7 +40,8 @@ def main(conf_file):
     from wrf2plev import (readnc_wrf_var, build_var_cache,
                           nc_calc_vis, nc_calc_gust,
                           to_isobar, to_agl,
-                          create_nout, nc_interpolate_and_compute)
+                          nc_interpolate_and_compute)
+    from write_nout_optimized import create_nout
 
 
     print( '\n========== WRF to PLEV ==========' )
@@ -200,14 +201,6 @@ def main(conf_file):
     # WRITE TO NETCDF FILE
         print( '----- WRITE PLEV to netCDF ' )
         st = time.time()
-    
-#    # === Save and disable OMP settings 36-> 1 ===
-#
-#        original_omp = os.environ.get('OMP_NUM_THREADS', '1')
-#        os.environ['OMP_NUM_THREADS'] = '1'
-#    
-#        print('jstest omp_num_threads:', os.environ['OMP_NUM_THREADS'])
-#    # ================================
 
         outpath = cr['control']['outpath']
         oheader = cr['control']['outheader']
@@ -217,27 +210,13 @@ def main(conf_file):
         print( '  -> ', outname )
         outfile = outpath +'/'+ oheader
 
-        create_nout(wrfin, outfile, ftim, analtim, valid_time, var_soil, var_2d, var_engy, 
-                       var_post, plev, plev_3d, plev_q, plev_qn, 
+        create_nout(wrfin, outfile, ftim, analtim, valid_time, var_soil, var_2d, var_engy,
+                       var_post, plev, plev_3d, plev_q, plev_qn,
                        compression='deflate', deflate_level=4, shuffle=True, packing=True,
-                       packing_dtype='i2')
+                       packing_dtype='i2',
+                       use_fixed_packing=True,      # Fixed scale/offset for consistent file sizes
+                       single_thread_write=True)    # Thread-safe file writing
 #
-#        create_nout(wrfin, outfile, ftim, analtim, valid_time, var_soil, var_2d, var_engy, 
-#                       var_post, plev, plev_3d, plev_q, plev_qn, 
-#                       compression='deflate', deflate_level=4, shuffle=True, packing=False)
-#
-#        create_nout(wrfin, outfile, ftim, analtim, valid_time, var_soil, var_2d, var_engy, 
-#                       var_post, plev, plev_3d, plev_q, plev_qn, compression=None, packing=False)
-#
-        #create_nout(wrfin, outfile, ftim, analtim, valid_time, var_soil, var_2d, var_engy,
-        #               var_post, plev, plev_3d, plev_q, plev_qn)
-
-#    # ===  OMP_NUM_THREADS 1->36 ====
-#
-#        os.environ['OMP_NUM_THREADS'] = original_omp
-#        print('jstest omp_num_threads:', os.environ['OMP_NUM_THREADS'])
-#    # ================================
-
         ed = time.time()
         print( '   (', ed-st, 's)' )
 
