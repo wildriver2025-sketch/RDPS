@@ -215,7 +215,7 @@ def main(conf_file):
                        compression='deflate', deflate_level=4, shuffle=True, packing=True,
                        packing_dtype='i2',
                        use_fixed_packing=True,      # Fixed scale/offset for consistent file sizes
-                       single_thread_write=True)    # Thread-safe file writing
+                       single_thread_write=False)   # Keep OMP threads for performance
 #
         ed = time.time()
         print( '   (', ed-st, 's)' )
