@@ -743,6 +743,7 @@ def read_wrf_var(wrfin, var, ftim, timeidx=None, cache=None, omp=False):
                        varname = "SWDDIF2",
                        timeidx = timeidx,
                        cache   = cache)
+        value = value.where(value >= 0, 0)  # clip negative values to 0
         #value.attrs["GRIB_paramId"] = 260263
         value.attrs["GRIB_discipline"] = 0
         value.attrs["GRIB_parameterCategory"] = 4
