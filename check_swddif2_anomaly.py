@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import xarray as xr
+from netCDF4 import Dataset
 
 
 THRESHOLD_DEFAULT = 500.0
@@ -30,30 +30,37 @@ LIGHT_PATTERN = "r030_v040_easia_prs.2byte.ft006.{analtim}.nc"
 
 
 def read_swddif2(fpath, varname):
-    """xarray로 NetCDF 파일에서 varname 변수를 읽어 통계를 반환.
-    xarray가 scale_factor/add_offset을 자동 적용함."""
+    """netCDF4로 파일에서 varname 변수를 읽어 통계를 반환."""
     result = {"file": fpath.name, "exists": fpath.exists()}
     if not fpath.exists():
         return result
 
     try:
-        with xr.open_dataset(fpath, mask_and_scale=True) as ds:
-            if varname not in ds:
-                candidates = [v for v in ds.data_vars if "SWDDIF" in v.upper() or "DIF" in v.upper()]
+        with Dataset(fpath, "r") as nc:
+            if varname not in nc.variables:
+                candidates = [v for v in nc.variables if "SWDDIF" in v.upper() or "DIF" in v.upper()]
                 result["error"] = f"변수 '{varname}' 없음"
                 if candidates:
                     result["candidates"] = candidates
                 return result
 
-            data = ds[varname].values.astype(np.float32)
+            var    = nc.variables[varname]
+            data   = var[:]
+            scale  = getattr(var, "scale_factor", 1.0)
+            offset = getattr(var, "add_offset",   0.0)
+            fill   = getattr(var, "_FillValue",    None)
+
+            data = np.ma.filled(data.astype(np.float32), np.nan)
+            if fill is not None:
+                data[data == fill] = np.nan
+            data = data * scale + offset
 
             max_val  = float(np.nanmax(data))
             mean_val = float(np.nanmean(data))
             n_above  = int(np.sum(data >= THRESHOLD_DEFAULT))
 
-            units = ds[varname].attrs.get("units", "-")
             result.update({"max": max_val, "mean": mean_val, "n_above": n_above,
-                           "shape": data.shape, "units": units})
+                           "shape": data.shape, "units": getattr(var, "units", "-")})
     except Exception as e:
         result["error"] = str(e)
 
@@ -111,25 +118,46 @@ def print_result_table(rows, threshold, label):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SWDDIF2 이상값 검사 (2026년 4월, +6h 예측)")
+    parser = argparse.ArgumentParser(
+        description="SWDDIF2 이상값 검사 (2026년 4월, +6h 예측)",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="예시:\n"
+               "  python check_swddif2_anomaly.py /ARCV/.../202604\n"
+               "  python check_swddif2_anomaly.py /ARCV/.../202604 --start 10 --end 15\n"
+               "  python check_swddif2_anomaly.py /ARCV/.../202604 --start 20 --end 20 --hours 00 12\n"
+    )
     parser.add_argument("base_dir",    type=str, help="202604 디렉터리 경로")
     parser.add_argument("--threshold", type=float, default=THRESHOLD_DEFAULT,
                         help=f"이상값 기준 (기본값: {THRESHOLD_DEFAULT})")
     parser.add_argument("--varname",   type=str,   default=VARNAME_DEFAULT,
                         help=f"변수명 (기본값: {VARNAME_DEFAULT})")
+    parser.add_argument("--start",     type=int,   default=1,
+                        help="시작 일(day), 기본값: 1")
+    parser.add_argument("--end",       type=int,   default=30,
+                        help="종료 일(day), 기본값: 30")
+    parser.add_argument("--hours",     type=int,   nargs="+", default=ANAL_HOURS,
+                        choices=[0, 6, 12, 18], metavar="{0,6,12,18}",
+                        help="확인할 분석시간(UTC), 기본값: 0 6 12 18")
     args = parser.parse_args()
 
     base_dir  = Path(args.base_dir)
     threshold = args.threshold
     varname   = args.varname
+    start_day = args.start
+    end_day   = args.end
+    anal_hours = sorted(args.hours)
 
     if not base_dir.exists():
         print(f"[ERROR] 디렉터리를 찾을 수 없음: {base_dir}")
         sys.exit(1)
+    if not (1 <= start_day <= end_day <= 30):
+        print(f"[ERROR] 날짜 범위 오류: --start {start_day} --end {end_day} (1~30 범위)")
+        sys.exit(1)
 
     print("=" * 70)
-    print(f"  SWDDIF2 이상값 검사  |  기준: >= {threshold}  |  기간: 2026년 4월")
-    print(f"  분석시간: 00/06/12/18 UTC  |  예측시간: +6h")
+    print(f"  SWDDIF2 이상값 검사  |  기준: >= {threshold}")
+    print(f"  기간: 2026-04-{start_day:02d} ~ 2026-04-{end_day:02d}")
+    print(f"  분석시간: {anal_hours} UTC  |  예측시간: +6h")
     print(f"  디렉터리: {base_dir}")
     print("=" * 70)
 
@@ -138,9 +166,8 @@ def main():
     missing    = []
     errors     = []
 
-    for day in range(1, 31):
-        for hh in ANAL_HOURS:
-            analtim = f"2026040{day:01d}{hh:02d}" if day < 10 else f"202604{day:02d}{hh:02d}"
+    for day in range(start_day, end_day + 1):
+        for hh in anal_hours:
             analtim = f"202604{day:02d}{hh:02d}"
             subdir  = base_dir / f"{day:02d}" / f"{hh:02d}"
 
