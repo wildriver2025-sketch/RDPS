@@ -1,19 +1,22 @@
 """
-2026년 4월 WRF 3km(RDPS) 분석시간(00/06/12/18 UTC) +6h 예측자료에서
-SWDDIF2(산란일사량) 값이 500 이상인 날짜/시간을 검사하는 스크립트.
+Check SWDDIF2 (diffuse solar radiation) anomalies in WRF 3km (RDPS) output.
+Scans +6h forecast files for each analysis time (00/06/12/18 UTC) in April 2026
+and reports timestamps where SWDDIF2 >= threshold.
 
-디렉터리 구조:
-  {base_dir}/DD/HH/rdps_pres_r030_h006.{YYYYMMDDHH}.nc        (원시파일)
-  {base_dir}/DD/HH/r030_v040_easia_prs.2byte.ft006.{YYYYMMDDHH}.nc  (경량화파일)
+Directory structure:
+  {base_dir}/DD/HH/rdps_pres_r030_h006.{YYYYMMDDHH}.nc        (raw file)
+  {base_dir}/DD/HH/r030_v040_easia_prs.2byte.ft006.{YYYYMMDDHH}.nc  (light file)
 
-사용법:
+Usage:
     python check_swddif2_anomaly.py /ARCV/NWP/RAWD/MODL/RDPS/NE57/202604
     python check_swddif2_anomaly.py /ARCV/NWP/RAWD/MODL/RDPS/NE57/202604 --threshold 500
-    python check_swddif2_anomaly.py /ARCV/NWP/RAWD/MODL/RDPS/NE57/202604 --varname SWDDIF2
+    python check_swddif2_anomaly.py /ARCV/NWP/RAWD/MODL/RDPS/NE57/202604 --start 10 --end 15
+    python check_swddif2_anomaly.py /ARCV/NWP/RAWD/MODL/RDPS/NE57/202604 --start 20 --end 20 --hours 0 12
 """
 
 import argparse
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -24,14 +27,12 @@ THRESHOLD_DEFAULT = 500.0
 VARNAME_DEFAULT   = "SWDDIF2"
 ANAL_HOURS        = [0, 6, 12, 18]
 
-# 파일명 패턴
 RAW_PATTERN   = "rdps_pres_r030_h006.{analtim}.nc"
 LIGHT_PATTERN = "r030_v040_easia_prs.2byte.ft006.{analtim}.nc"
 
 
 def read_swddif2(fpath, varname):
-    """xarray로 파일에서 varname 변수를 읽어 통계를 반환.
-    scale_factor/add_offset 자동 적용."""
+    """Read varname from NetCDF file via xarray (scale_factor/add_offset applied automatically)."""
     result = {"file": fpath.name, "exists": fpath.exists()}
     if not fpath.exists():
         return result
@@ -40,7 +41,7 @@ def read_swddif2(fpath, varname):
         with xr.open_dataset(fpath, mask_and_scale=True) as ds:
             if varname not in ds:
                 candidates = [v for v in ds.data_vars if "SWDDIF" in v.upper() or "DIF" in v.upper()]
-                result["error"] = f"변수 '{varname}' 없음"
+                result["error"] = f"Variable '{varname}' not found"
                 if candidates:
                     result["candidates"] = candidates
                 return result
@@ -59,7 +60,7 @@ def read_swddif2(fpath, varname):
 
 
 def check_file(fpath, varname, threshold):
-    """파일 읽기 + 임계값 이상 여부 반환."""
+    """Read file and flag if any value exceeds threshold."""
     r = read_swddif2(fpath, varname)
     if "n_above" in r:
         r["anomaly"] = r["n_above"] > 0
@@ -67,19 +68,19 @@ def check_file(fpath, varname, threshold):
 
 
 def print_result_table(rows, threshold, label):
-    """이상값이 있는 행만 테이블로 출력."""
+    """Print table of timestamps where anomalies were found."""
     anomalies = [r for r in rows if r.get("anomaly")]
 
     print(f"\n{'─'*70}")
-    print(f"  [{label}]  임계값 >= {threshold}")
+    print(f"  [{label}]  threshold >= {threshold}")
     print(f"{'─'*70}")
 
     if not anomalies:
-        print("  이상값 없음")
+        print("  No anomalies found.")
         return
 
-    print(f"  {'분석시간(UTC)':<16} {'최대값':>10} {'평균값':>10} {'>={:.0f} 격자수':>14}  파일명".format(threshold))
-    print(f"  {'-'*16} {'-'*10} {'-'*10} {'-'*14}  {'-'*35}")
+    print(f"  {'Analysis time(UTC)':<20} {'Max':>10} {'Mean':>10} {'>={:.0f} grids'.format(threshold):>14}  File")
+    print(f"  {'-'*20} {'-'*10} {'-'*10} {'-'*14}  {'-'*35}")
 
     prev_day = None
     for r in anomalies:
@@ -88,20 +89,18 @@ def print_result_table(rows, threshold, label):
             print()
         prev_day = cur_day
         ts = f"{r['analtim'][:4]}-{r['analtim'][4:6]}-{r['analtim'][6:8]} {r['analtim'][8:10]}UTC"
-        print(f"  {ts:<16} {r['max']:>10.2f} {r['mean']:>10.4f} {r['n_above']:>14}  {r['file']}")
+        print(f"  {ts:<20} {r['max']:>10.2f} {r['mean']:>10.4f} {r['n_above']:>14}  {r['file']}")
 
-    # 날짜별 요약
-    from collections import defaultdict
     daily = defaultdict(lambda: {"max": 0.0, "n_above": 0, "hours": []})
     for r in anomalies:
         d = r["analtim"][:8]
-        daily[d]["max"]    = max(daily[d]["max"], r["max"])
+        daily[d]["max"]     = max(daily[d]["max"], r["max"])
         daily[d]["n_above"] += r["n_above"]
         daily[d]["hours"].append(int(r["analtim"][8:10]))
 
-    print(f"\n  [날짜별 요약]")
-    print(f"  {'날짜':<12} {'일최대값':>10} {'누적 이상격자':>14}  이상 발생 분석시간(UTC)")
-    print(f"  {'-'*12} {'-'*10} {'-'*14}  {'-'*30}")
+    print(f"\n  [Daily summary]")
+    print(f"  {'Date':<12} {'Daily max':>10} {'Total grids':>14}  Analysis hours with anomaly (UTC)")
+    print(f"  {'-'*12} {'-'*10} {'-'*14}  {'-'*35}")
     for d in sorted(daily):
         hours_str = ", ".join(f"{h:02d}h" for h in sorted(daily[d]["hours"]))
         dstr = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
@@ -110,46 +109,46 @@ def print_result_table(rows, threshold, label):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SWDDIF2 이상값 검사 (2026년 4월, +6h 예측)",
+        description="Check SWDDIF2 anomalies in RDPS April 2026 (+6h forecast)",
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog="예시:\n"
+        epilog="Examples:\n"
                "  python check_swddif2_anomaly.py /ARCV/.../202604\n"
                "  python check_swddif2_anomaly.py /ARCV/.../202604 --start 10 --end 15\n"
-               "  python check_swddif2_anomaly.py /ARCV/.../202604 --start 20 --end 20 --hours 00 12\n"
+               "  python check_swddif2_anomaly.py /ARCV/.../202604 --start 20 --end 20 --hours 0 12\n"
     )
-    parser.add_argument("base_dir",    type=str, help="202604 디렉터리 경로")
+    parser.add_argument("base_dir",    type=str,   help="Path to 202604 directory")
     parser.add_argument("--threshold", type=float, default=THRESHOLD_DEFAULT,
-                        help=f"이상값 기준 (기본값: {THRESHOLD_DEFAULT})")
+                        help=f"Anomaly threshold (default: {THRESHOLD_DEFAULT})")
     parser.add_argument("--varname",   type=str,   default=VARNAME_DEFAULT,
-                        help=f"변수명 (기본값: {VARNAME_DEFAULT})")
+                        help=f"Variable name (default: {VARNAME_DEFAULT})")
     parser.add_argument("--start",     type=int,   default=1,
-                        help="시작 일(day), 기본값: 1")
+                        help="Start day (default: 1)")
     parser.add_argument("--end",       type=int,   default=30,
-                        help="종료 일(day), 기본값: 30")
+                        help="End day (default: 30)")
     parser.add_argument("--hours",     type=int,   nargs="+", default=ANAL_HOURS,
                         choices=[0, 6, 12, 18], metavar="{0,6,12,18}",
-                        help="확인할 분석시간(UTC), 기본값: 0 6 12 18")
+                        help="Analysis hours to check in UTC (default: 0 6 12 18)")
     args = parser.parse_args()
 
-    base_dir  = Path(args.base_dir)
-    threshold = args.threshold
-    varname   = args.varname
-    start_day = args.start
-    end_day   = args.end
+    base_dir   = Path(args.base_dir)
+    threshold  = args.threshold
+    varname    = args.varname
+    start_day  = args.start
+    end_day    = args.end
     anal_hours = sorted(args.hours)
 
     if not base_dir.exists():
-        print(f"[ERROR] 디렉터리를 찾을 수 없음: {base_dir}")
+        print(f"[ERROR] Directory not found: {base_dir}")
         sys.exit(1)
     if not (1 <= start_day <= end_day <= 30):
-        print(f"[ERROR] 날짜 범위 오류: --start {start_day} --end {end_day} (1~30 범위)")
+        print(f"[ERROR] Invalid day range: --start {start_day} --end {end_day} (must be 1-30)")
         sys.exit(1)
 
     print("=" * 70)
-    print(f"  SWDDIF2 이상값 검사  |  기준: >= {threshold}")
-    print(f"  기간: 2026-04-{start_day:02d} ~ 2026-04-{end_day:02d}")
-    print(f"  분석시간: {anal_hours} UTC  |  예측시간: +6h")
-    print(f"  디렉터리: {base_dir}")
+    print(f"  SWDDIF2 Anomaly Check  |  threshold >= {threshold}")
+    print(f"  Period : 2026-04-{start_day:02d} ~ 2026-04-{end_day:02d}")
+    print(f"  Anal.  : {anal_hours} UTC  |  Forecast: +6h")
+    print(f"  Dir    : {base_dir}")
     print("=" * 70)
 
     raw_rows   = []
@@ -172,24 +171,23 @@ def main():
                     missing.append(str(path))
                 elif "error" in r:
                     errors.append(f"  {path.name}: {r['error']}"
-                                  + (f"  후보변수: {r.get('candidates')}" if "candidates" in r else ""))
+                                  + (f"  candidates: {r.get('candidates')}" if "candidates" in r else ""))
                 else:
                     rows.append(r)
 
-    # ---- 통계 ----
-    total = len(range(1, 31)) * len(ANAL_HOURS)
-    print(f"\n[파일 현황]  분석시간 총 {total}개 (x2 파일유형)")
-    print(f"  원시파일    읽기 성공: {len(raw_rows):3d} / 없는 파일: {sum(1 for p in missing if 'rdps_pres' in p)}")
-    print(f"  경량화파일  읽기 성공: {len(light_rows):3d} / 없는 파일: {sum(1 for p in missing if 'r030_v040' in p)}")
+    n_days = end_day - start_day + 1
+    total  = n_days * len(anal_hours)
+    print(f"\n[File summary]  {total} analysis times ({n_days} days x {len(anal_hours)} hours) x 2 file types")
+    print(f"  Raw   files read OK: {len(raw_rows):3d} / missing: {sum(1 for p in missing if 'rdps_pres' in p)}")
+    print(f"  Light files read OK: {len(light_rows):3d} / missing: {sum(1 for p in missing if 'r030_v040' in p)}")
 
     if errors:
-        print(f"\n[읽기 오류] {len(errors)}건")
+        print(f"\n[Read errors] {len(errors)} case(s)")
         for e in errors:
             print(e)
 
-    # ---- 이상값 테이블 ----
-    print_result_table(raw_rows,   threshold, "원시파일   rdps_pres_r030_h006")
-    print_result_table(light_rows, threshold, "경량화파일 r030_v040_easia_prs.2byte.ft006")
+    print_result_table(raw_rows,   threshold, "Raw   file: rdps_pres_r030_h006")
+    print_result_table(light_rows, threshold, "Light file: r030_v040_easia_prs.2byte.ft006")
 
     print("\n" + "=" * 70)
 
