@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from netCDF4 import Dataset
+import xarray as xr
 
 
 THRESHOLD_DEFAULT = 500.0
@@ -30,37 +30,28 @@ LIGHT_PATTERN = "r030_v040_easia_prs.2byte.ft006.{analtim}.nc"
 
 
 def read_swddif2(fpath, varname):
-    """netCDF4로 파일에서 varname 변수를 읽어 통계를 반환."""
+    """xarray로 파일에서 varname 변수를 읽어 통계를 반환.
+    scale_factor/add_offset 자동 적용."""
     result = {"file": fpath.name, "exists": fpath.exists()}
     if not fpath.exists():
         return result
 
     try:
-        with Dataset(fpath, "r") as nc:
-            if varname not in nc.variables:
-                candidates = [v for v in nc.variables if "SWDDIF" in v.upper() or "DIF" in v.upper()]
+        with xr.open_dataset(fpath, mask_and_scale=True) as ds:
+            if varname not in ds:
+                candidates = [v for v in ds.data_vars if "SWDDIF" in v.upper() or "DIF" in v.upper()]
                 result["error"] = f"변수 '{varname}' 없음"
                 if candidates:
                     result["candidates"] = candidates
                 return result
 
-            var    = nc.variables[varname]
-            data   = var[:]
-            scale  = getattr(var, "scale_factor", 1.0)
-            offset = getattr(var, "add_offset",   0.0)
-            fill   = getattr(var, "_FillValue",    None)
-
-            data = np.ma.filled(data.astype(np.float32), np.nan)
-            if fill is not None:
-                data[data == fill] = np.nan
-            data = data * scale + offset
-
+            data     = ds[varname].values.astype(np.float32)
             max_val  = float(np.nanmax(data))
             mean_val = float(np.nanmean(data))
             n_above  = int(np.sum(data >= THRESHOLD_DEFAULT))
 
             result.update({"max": max_val, "mean": mean_val, "n_above": n_above,
-                           "shape": data.shape, "units": getattr(var, "units", "-")})
+                           "shape": data.shape, "units": ds[varname].attrs.get("units", "-")})
     except Exception as e:
         result["error"] = str(e)
 
