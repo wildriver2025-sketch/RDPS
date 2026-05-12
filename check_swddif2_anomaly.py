@@ -29,7 +29,7 @@ RAW_PATTERN   = "rdps_pres_r030_h006.{analtim}.nc"
 LIGHT_PATTERN = "r030_v040_easia_prs.2byte.ft006.{analtim}.nc"
 
 
-def read_swddif2(fpath: Path, varname: str) -> dict:
+def read_swddif2(fpath, varname):
     """netCDF4 파일에서 varname 변수를 읽어 통계를 반환."""
     result = {"file": fpath.name, "exists": fpath.exists()}
     if not fpath.exists():
@@ -70,7 +70,7 @@ def read_swddif2(fpath: Path, varname: str) -> dict:
     return result
 
 
-def check_file(fpath: Path, varname: str, threshold: float) -> dict:
+def check_file(fpath, varname, threshold):
     """파일 읽기 + 임계값 이상 여부 반환."""
     r = read_swddif2(fpath, varname)
     if "n_above" in r:
@@ -78,7 +78,7 @@ def check_file(fpath: Path, varname: str, threshold: float) -> dict:
     return r
 
 
-def print_result_table(rows: list[dict], threshold: float, label: str):
+def print_result_table(rows, threshold, label):
     """이상값이 있는 행만 테이블로 출력."""
     anomalies = [r for r in rows if r.get("anomaly")]
 
