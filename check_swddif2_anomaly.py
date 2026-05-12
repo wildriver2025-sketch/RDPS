@@ -67,16 +67,24 @@ def check_file(fpath, varname, threshold):
     return r
 
 
-def print_result_table(rows, threshold, label):
+def print_result_table(rows, threshold, label, missing_count, errors):
     """Print table of timestamps where anomalies were found."""
-    anomalies = [r for r in rows if r.get("anomaly")]
+    anomalies  = [r for r in rows if r.get("anomaly")]
+    ok_no_anom = [r for r in rows if "anomaly" in r and not r["anomaly"]]
 
     print(f"\n{'─'*70}")
     print(f"  [{label}]  threshold >= {threshold}")
+    print(f"  Files: {len(rows)} read OK / {missing_count} missing / {len(errors)} error(s)")
+    if errors:
+        for e in errors:
+            print(f"    {e}")
     print(f"{'─'*70}")
 
     if not anomalies:
-        print("  No anomalies found.")
+        if missing_count == len(rows) + missing_count and len(rows) == 0:
+            print("  No files found.")
+        else:
+            print(f"  No anomalies found (>= {threshold}) in {len(ok_no_anom)} file(s) checked.")
         return
 
     print(f"  {'Analysis time(UTC)':<20} {'Max':>10} {'Mean':>10} {'>={:.0f} grids'.format(threshold):>14}  File")
@@ -175,19 +183,17 @@ def main():
                 else:
                     rows.append(r)
 
-    n_days = end_day - start_day + 1
-    total  = n_days * len(anal_hours)
+    n_days      = end_day - start_day + 1
+    total       = n_days * len(anal_hours)
+    raw_missing = sum(1 for p in missing if "rdps_pres"  in p)
+    lgt_missing = sum(1 for p in missing if "r030_v040"  in p)
+    raw_errors  = [e for e in errors if "rdps_pres"  in e]
+    lgt_errors  = [e for e in errors if "r030_v040"  in e]
+
     print(f"\n[File summary]  {total} analysis times ({n_days} days x {len(anal_hours)} hours) x 2 file types")
-    print(f"  Raw   files read OK: {len(raw_rows):3d} / missing: {sum(1 for p in missing if 'rdps_pres' in p)}")
-    print(f"  Light files read OK: {len(light_rows):3d} / missing: {sum(1 for p in missing if 'r030_v040' in p)}")
 
-    if errors:
-        print(f"\n[Read errors] {len(errors)} case(s)")
-        for e in errors:
-            print(e)
-
-    print_result_table(raw_rows,   threshold, "Raw   file: rdps_pres_r030_h006")
-    print_result_table(light_rows, threshold, "Light file: r030_v040_easia_prs.2byte.ft006")
+    print_result_table(raw_rows,   threshold, "Raw   file: rdps_pres_r030_h006",            raw_missing, raw_errors)
+    print_result_table(light_rows, threshold, "Light file: r030_v040_easia_prs.2byte.ft006", lgt_missing, lgt_errors)
 
     print("\n" + "=" * 70)
 
